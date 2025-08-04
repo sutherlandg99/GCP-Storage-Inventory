@@ -1,0 +1,54 @@
+--- Starting Final Debug Script ---
+
+
+--- DEBUG: GCS for project: sdo-ml ---
+Updated property [core/project].
+--- Step 1.1: Listing buckets ---
+--- Buckets found: ---
+gs://aia-jsoc-calibrated/
+gs://aia-jsoc-landing/
+gs://aia-synoptic-calibrated/
+gs://aia-synoptic-landing/
+gs://fdl-cloud-function-store/
+gs://gcf-v2-sources-424248226390-us-central1/
+gs://hmi-jsoc-calibrated/
+gs://hmi-jsoc-landing/
+gs://sdoml-v2-webdataset/
+gs://synoptic-webdataset/
+gs://test-webdataset/
+
+--- Step 1.2: Calculating total size with live progress ---
+Found 11 buckets to process...
+
+[1/11] Processing bucket: gs://aia-jsoc-calibrated/
+  Starting size calculation...
+  ✓ Size: 366.12 GB (393121571212 bytes)
+  Running total: 366.12 GB
+
+[2/11] Processing bucket: gs://aia-jsoc-landing/
+  Starting size calculation...
+  ✓ Size: 3.51 TB (3867382338944 bytes)
+  Running total: 3.87 TB
+
+[3/11] Processing bucket: gs://aia-synoptic-calibrated/
+  Starting size calculation...
+  ✓ Size: 2.53 TB (2782199548800 bytes)
+  Running total: 6.40 TB
+
+[4/11] Processing bucket: gs://aia-synoptic-landing/
+  Starting size calculation...
+  ✓ Size: 2.64 TB (2913374243520 bytes)
+  Running total: 9.05 TB
+
+[5/11] Processing bucket: gs://fdl-cloud-function-store/
+  Starting size calculation...
+  ✓ Size: 278679 bytes (278679 bytes)
+  Running total: 9.05 TB
+
+[6/11] Processing bucket: gs://gcf-v2-sources-424248226390-us-central1/
+  Starting size calculation...
+  ✓ Size: 285800 bytes (285800 bytes)
+  Running total: 9.05 TB
+
+[7/11] Processing bucket: gs://hmi-jsoc-calibrated/
+  Starting size calculation...
