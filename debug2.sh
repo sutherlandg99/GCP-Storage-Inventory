@@ -98,7 +98,8 @@ CURRENT_BUCKET=0
 echo "Found $TOTAL_BUCKETS buckets to process..."
 echo ""
 
-echo "$BUCKET_LIST" | while read -r bucket_uri; do
+# Process buckets using process substitution to avoid subshell issues
+while IFS= read -r bucket_uri; do
     if [ -n "$bucket_uri" ]; then
         CURRENT_BUCKET=$((CURRENT_BUCKET + 1))
         echo "[$CURRENT_BUCKET/$TOTAL_BUCKETS] Processing bucket: $bucket_uri"
@@ -108,25 +109,57 @@ echo "$BUCKET_LIST" | while read -r bucket_uri; do
         bucket_metadata_output=$(mktemp)
         bucket_metadata_error=$(mktemp)
         
+        # Initialize metadata variables with defaults
+        bucket_name="$bucket_uri"
+        bucket_location="unknown"
+        storage_class="unknown"
+        created_time="unknown"
+        updated_time="unknown"
+        created_by="unknown"
+        labels="none"
+        
         gcloud storage buckets describe "$bucket_uri" --format=json > "$bucket_metadata_output" 2> "$bucket_metadata_error"
         metadata_exit_code=$?
         
         if [ $metadata_exit_code -eq 0 ] && [ -s "$bucket_metadata_output" ]; then
             echo "  ✓ Bucket metadata collected successfully"
             
-            # Extract key metadata using jq
-            bucket_name=$(jq -r '.name // "unknown"' "$bucket_metadata_output" 2>/dev/null)
-            bucket_location=$(jq -r '.location // "unknown"' "$bucket_metadata_output" 2>/dev/null)
-            storage_class=$(jq -r '.storageClass // "unknown"' "$bucket_metadata_output" 2>/dev/null)
-            created_time=$(jq -r '.timeCreated // "unknown"' "$bucket_metadata_output" 2>/dev/null)
-            updated_time=$(jq -r '.updated // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            # Debug: Show the actual JSON structure we're working with
+            echo "  DEBUG: Raw JSON content (first 500 chars):"
+            head -c 500 "$bucket_metadata_output"
+            echo ""
+            echo "  DEBUG: Available top-level keys:"
+            jq -r 'keys[]' "$bucket_metadata_output" 2>/dev/null | head -10
+            
+            # Try different field names that might exist in the JSON
+            bucket_name=$(jq -r '.name // .id // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            echo "  DEBUG: bucket_name = '$bucket_name'"
+            
+            bucket_location=$(jq -r '.location // .locationType // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            echo "  DEBUG: bucket_location = '$bucket_location'"
+            
+            # Try multiple possible field names for storage class (GCS uses default_storage_class, others might use storageClass)
+            storage_class=$(jq -r '.default_storage_class // .storageClass // .defaultStorageClass // .storage_class // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            echo "  DEBUG: storage_class = '$storage_class'"
+            
+            # Try multiple timestamp field names (GCS uses creation_time, others might use timeCreated)
+            created_time=$(jq -r '.creation_time // .timeCreated // .createTime // .created // .creationTimestamp // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            echo "  DEBUG: created_time = '$created_time'"
+            
+            # Try multiple update timestamp field names (GCS uses update_time, others might use updated)
+            updated_time=$(jq -r '.update_time // .updated // .timeUpdated // .updateTime // .lastModified // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            echo "  DEBUG: updated_time = '$updated_time'"
+            
             versioning=$(jq -r '.versioning.enabled // false' "$bucket_metadata_output" 2>/dev/null)
             
-            # Extract creator information (owner/creator)
-            created_by=$(jq -r '.owner.entity // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            # Extract creator information (try multiple possible fields, including from labels)
+            created_by=$(jq -r '.owner.entity // .owner.entityId // .createdBy // .created_by // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+            
+            # For GCS buckets, check if creator info is in labels
             if [ "$created_by" = "unknown" ]; then
-                created_by=$(jq -r '.owner.entityId // "unknown"' "$bucket_metadata_output" 2>/dev/null)
+                created_by=$(jq -r '.labels["created-by"] // .labels.createdBy // .labels.creator // "unknown"' "$bucket_metadata_output" 2>/dev/null)
             fi
+            echo "  DEBUG: created_by = '$created_by'"
             
             # Extract labels
             labels_json=$(jq -r '.labels // {}' "$bucket_metadata_output" 2>/dev/null)
@@ -135,6 +168,7 @@ echo "$BUCKET_LIST" | while read -r bucket_uri; do
             else
                 labels="none"
             fi
+            echo "  DEBUG: labels = '$labels'"
             
             echo "    Name: $bucket_name"
             echo "    Location: $bucket_location"
@@ -281,12 +315,8 @@ echo "$BUCKET_LIST" | while read -r bucket_uri; do
                 # Calculate size in GB for CSV
                 bucket_size_gb=$(echo "scale=6; $bucket_bytes / 1073741824" | bc -l)
                 
-                # Add to CSV (use metadata if available, otherwise use basic info)
-                if [ $metadata_exit_code -eq 0 ] && [ -s "$bucket_metadata_output" ]; then
-                    add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "$bucket_size_gb" "$bucket_bytes"
-                else
-                    add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_uri" "unknown" "unknown" "unknown" "unknown" "unknown" "none" "$bucket_size_gb" "$bucket_bytes"
-                fi
+                # Add to CSV using the metadata variables that are now in scope
+                add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "$bucket_size_gb" "$bucket_bytes"
                 
                 # Update running total
                 current_total=$(cat "$TEMP_TOTAL")
@@ -304,12 +334,8 @@ echo "$BUCKET_LIST" | while read -r bucket_uri; do
             else
                 echo "  ✓ Size: 0 bytes (empty bucket or parse error)"
                 
-                # Still add to CSV with 0 size
-                if [ $metadata_exit_code -eq 0 ] && [ -s "$bucket_metadata_output" ]; then
-                    add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "0" "0"
-                else
-                    add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_uri" "unknown" "unknown" "unknown" "unknown" "unknown" "none" "0" "0"
-                fi
+                # Still add to CSV with 0 size, using the metadata variables
+                add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "0" "0"
             fi
         else
             echo "  ✗ Error getting size for $bucket_uri (exit code: $du_exit_code)"
@@ -317,19 +343,15 @@ echo "$BUCKET_LIST" | while read -r bucket_uri; do
                 echo "  Error details: $(cat "$temp_error")"
             fi
             
-            # Still add to CSV with error info
-            if [ $metadata_exit_code -eq 0 ] && [ -s "$bucket_metadata_output" ]; then
-                add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "ERROR" "ERROR"
-            else
-                add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_uri" "unknown" "unknown" "unknown" "unknown" "unknown" "none" "ERROR" "ERROR"
-            fi
+            # Still add to CSV with error info, using the metadata variables
+            add_csv_row "$PROJECT_ID_GCS" "GCS_Bucket" "$bucket_name" "$bucket_location" "$created_time" "$created_by" "$updated_time" "$storage_class" "$labels" "ERROR" "ERROR"
         fi
         
         # Clean up temp files
         rm -f "$temp_output" "$temp_error"
         echo ""
     fi
-done
+done < <(echo "$BUCKET_LIST" | grep "gs://")
 
 # Read the final total
 PROJECT_GCS_BYTES=$(cat "$TEMP_TOTAL")
@@ -516,8 +538,6 @@ fi
 # --- Part 2: Verify Filestore for 'hl-compute' ---
 echo -e "\n\n--- VERIFY: Filestore for project: $PROJECT_ID_FS ---"
 gcloud config set project "$PROJECT_ID_FS"
-gcloud services enable filestore.googleapis.com --project="$PROJECT_ID_FS"
-sleep 10
 
 echo "--- Step 2.1: Capturing raw JSON output from gcloud ---"
 FS_OUTPUT_RAW=$(gcloud filestore instances list --project="$PROJECT_ID_FS" --format=json 2>&1)
