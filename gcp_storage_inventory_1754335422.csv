@@ -1,5 +1,0 @@
-GCP_Project,Resource_Type,Resource_Name,Location_Zone,Creation_Time,Created_By,Last_Updated,Type,Labels,Storage_Size_GB,Storage_Size_Bytes
-sdo-ml,Persistent_Disk,beastly-storage,us-central1-b,2025-07-28T10:41:26.665-07:00,sdo-ml,2025-07-28T10:45:07.187-07:00,pd-ssd,none,4000,4294967296000
-sdo-ml,Persistent_Disk,the-beast,us-central1-b,2025-07-23T11:37:32.883-07:00,sdo-ml,2025-07-23T11:37:34.026-07:00,pd-balanced,none,1000,1073741824000
-sdo-ml,Persistent_Disk,kraken-launcher,us-central1-c,2025-07-15T06:31:33.764-07:00,sdo-ml,2025-07-15T06:31:34.458-07:00,pd-balanced,none,50,53687091200
-hl-compute,Filestore,projects/hl-compute/locations/us-central1-a/instances/sdoml,unknown,2025-07-08T18:04:48.786218631Z,unknown,unknown,BASIC_SSD,none,20480,21990232555520
