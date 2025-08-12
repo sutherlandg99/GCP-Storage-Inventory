@@ -17,8 +17,7 @@ LOG_FILE="gcp_multi_project_audit_${TIMESTAMP}.txt"
 CSV_FILE="gcp_storage_inventory_${TIMESTAMP}.csv"
 
 # Parallelization settings
-MAX_CONCURRENT_BUCKETS=8  # Reduced for better stability
-MAX_CONCURRENT_PROJECTS=2  # Future enhancement for project-level parallelization
+MAX_CONCURRENT_BUCKETS=32  # Lower number of concurrent threads for better stability
 
 # Global totals
 TOTAL_GCS_BYTES=0
